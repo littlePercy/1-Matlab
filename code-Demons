@@ -1,0 +1,132 @@
+% Clean
+clc; clear all; close all;
+% Compile the mex files %compile_c_files
+
+% Read two images
+I1=im2double(imread('M.png'));
+I2=im2double(imread('S.png'));
+
+% Set static and moving image
+S=I2; M=I1;
+
+% Alpha (noise) constant
+alpha=2.5;
+
+% Velocity field smoothing kernel
+Hsmooth=fspecial('gaussian',[60 60],10);
+
+% The transformation fields
+Tx=zeros(size(M)); Ty=zeros(size(M)); Tz=zeros(size(M));
+
+[Sy,Sx] = gradient(S);
+for itt=1:200
+    Idiff=M-S;     % Difference image between moving and static image
+    % Default demon force, (Thirion 1998)
+    % Ux = -(Idiff.*Sx)./((Sx.^2+Sy.^2)+Idiff.^2);
+    % Uy = -(Idiff.*Sy)./((Sx.^2+Sy.^2)+Idiff.^2);
+    % Extended demon force. With forces from the gradients from both
+    % moving as static image. (Cachier 1999, He Wang 2005)
+    [My,Mx] = gradient(M);
+    Ux = -Idiff.*  ((Sx./((Sx.^2+Sy.^2)+alpha^2*Idiff.^2))+(Mx./((Mx.^2+My.^2)+alpha^2*Idiff.^2)));
+    Uy = -Idiff.*  ((Sy./((Sx.^2+Sy.^2)+alpha^2*Idiff.^2))+(My./((Mx.^2+My.^2)+alpha^2*Idiff.^2)));
+    Ux(isnan(Ux))=0; Uy(isnan(Uy))=0;% When divided by zero
+    Uxs=3*imfilter(Ux,Hsmooth); % Smooth the transformation field
+    Uys=3*imfilter(Uy,Hsmooth);
+    Tx=Tx+Uxs;% Add the new transformation field to the total transformation field.
+    Ty=Ty+Uys;
+    %     M=movepixels(I1,Tx,Ty,Tz,0);
+    M=movepixels_2d_double(I1,Tx,Ty,0);
+end
+% gridelment=gridshow();
+% gridelment=movepixels_2d_double(im2double(gridelment),Tx,Ty,0); 
+subplot(1,3,1), imshow(I1,[]); 
+title('image 1'); 
+subplot(1,3,2), imshow(I2,[]); 
+title('image 2'); 
+subplot(1,3,3), imshow(M,[]); 
+title('Registered image 1'); 
+figure,
+subplot(131),imshow(I1),
+subplot(132),imshow(abs(I2-M)),
+subplot(133),imshow(abs(I2-I1)) 
+figure,
+imshow(gridelment)
+
+
+
+function gridelment=gridshow()
+gridelment=ones(256,256)*255;
+for i=1:5:256
+    gridelment(i,:)=0;
+end
+for j=1:5:256
+    gridelment(:,j)=0;
+end
+gridelment=uint8(gridelment);
+imshow(gridelment);
+end
+
+ 
+
+function Iout=movepixels_2d_double(Iin,Tx,Ty,mode)
+% This function movepixels, will translate the pixels of an image
+%  according to x and y translation images (bilinear interpolated).
+% %  Iout = movepixels_2d_double(I,Tx,Ty,mode);
+% % Inputs; %   Tx, Ty: The transformation images, describing the
+% (backwards) translation of every pixel in x and y direction.
+%   mode: If 0: linear interpolation and outside pixels set to nearest pixel
+%            1: linear interpolation and outside pixels set to zero
+%            (cubic interpolation only supported by compiled mex file) %
+% 2: cubic interpolation and outsite pixels set to nearest pixel %
+% 3: cubic interpolation and outside pixels set to zero
+% % Outputs, %   Iout : The transformed image
+% % Function is written by D.Kroon University of Twente (February 2009)
+% Make all x,y indices 
+[x,y]=ndgrid(0:size(Iin,1)-1,0:size(Iin,2)-1);
+
+% Calculate the Transformed coordinates
+Tlocalx = x+Tx; 
+Tlocaly = y+Ty;
+
+% All the neighborh pixels involved in linear interpolation.
+xBas0=floor(Tlocalx);
+yBas0=floor(Tlocaly);
+xBas1=xBas0+1;
+yBas1=yBas0+1;
+
+% Linear interpolation constants (percentages)
+xCom=Tlocalx-xBas0;
+yCom=Tlocaly-yBas0;
+perc0=(1-xCom).*(1-yCom);
+perc1=(1-xCom).*yCom;
+perc2=xCom.*(1-yCom);
+perc3=xCom.*yCom;
+
+% limit indexes to boundaries
+check_xBas0=(xBas0<0)|(xBas0>(size(Iin,1)-1));
+check_yBas0=(yBas0<0)|(yBas0>(size(Iin,2)-1));
+xBas0(check_xBas0)=0;
+yBas0(check_yBas0)=0;
+check_xBas1=(xBas1<0)|(xBas1>(size(Iin,1)-1));
+check_yBas1=(yBas1<0)|(yBas1>(size(Iin,2)-1));
+xBas1(check_xBas1)=0;
+yBas1(check_yBas1)=0;
+
+Iout=zeros(size(Iin));
+for i=1:size(Iin,3)
+    Iin_one=Iin(:,:,i);     % Get the intensities
+    intensity_xyz0=Iin_one(1+xBas0+yBas0*size(Iin,1));
+    intensity_xyz1=Iin_one(1+xBas0+yBas1*size(Iin,1));
+    intensity_xyz2=Iin_one(1+xBas1+yBas0*size(Iin,1));
+    intensity_xyz3=Iin_one(1+xBas1+yBas1*size(Iin,1));
+    % Make pixels before outside Ibuffer mode
+    if(mode==1||mode==3)
+        intensity_xyz0(check_xBas0|check_yBas0)=0;
+        intensity_xyz1(check_xBas0|check_yBas1)=0;
+        intensity_xyz2(check_xBas1|check_yBas0)=0;
+        intensity_xyz3(check_xBas1|check_yBas1)=0;
+    end
+    Iout_one=intensity_xyz0.*perc0+intensity_xyz1.*perc1+intensity_xyz2.*perc2+intensity_xyz3.*perc3;
+    Iout(:,:,i)=reshape(Iout_one, [size(Iin,1) size(Iin,2)]);
+end
+end
