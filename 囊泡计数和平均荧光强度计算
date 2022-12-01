@@ -1,0 +1,94 @@
+function runProject(img_path,img_path_,thre_1,thre_2)
+tic
+% ===============================================
+% 2022/11/30 yuShuai                                    
+% 计算囊泡个数与平均荧光强度          
+% 输入 =>
+% img_path：原图文件夹路径
+% img_path_：拉窗宽后的图像文件夹路径,若不用拉窗宽处理，则输入和img_path同样的路径
+% thre_1：二值化阈值(0-1)值越大保留的区域越少，默认0.5
+% thre_2: 开操作阈值(0-500)删除小面积区域，默认75
+% 输出 =>
+% 图像分割结果，以及囊泡个数与平均荧光强度计算结果，均保存于X_processed文件中   
+% ===============================================
+close all;
+file_names = strsplit(img_path,'\');
+saveName = file_names{end};                      % 待处理数据名称
+X = sprintf('<========== %s 正在被处理',saveName);
+disp(X)
+file_path = img_path(1:end-length(saveName )-1); % 结果文件保存路径
+if length(file_path)==0
+    mkdir([saveName,'_processed'])
+    save_path = [saveName,'_processed'];
+else
+    mkdir(file_path,[saveName,'_processed'])
+    save_path = [file_path,'\',[saveName,'_processed']];
+end
+mkdir(save_path,'seg_images')
+mkdir(save_path,'rgb_images')
+seg_path = [save_path,'\','seg_images'];
+rgb_path = [save_path,'\','rgb_images'];
+files = dir(img_path);
+%% step 1: 分割囊泡图像并保存
+for i = 3:length(files)
+    img_name = files(i).name;
+    image_path_ = [img_path_,'\',img_name];
+    image = imread(image_path_);
+    img_bw=imbinarize(image,thre_1);            % 根据阈值二值化
+    img_fill = imfill(img_bw, 'holes');         % 填充孔洞
+    mask_binary = bwareaopen(img_fill,thre_2);  % 开操作去除小面积区域
+    % ==============================================
+    seg_save = [seg_path,'\',img_name];
+    imwrite(uint8(mask_binary*255),seg_save)
+    % ==============================================
+end
+%% step 2: 信号个数和平均荧光强度计算并保存
+fid = fopen([save_path,'\',saveName,'.txt'],'w');
+for i = 3:length(files)
+    img_name = files(i).name;
+    image_path = [img_path,'\',img_name];   
+    image = imread(image_path);             % 读取原始图像
+    segPath = [seg_path,'\',img_name];
+    seg_image = imread(segPath);            % 读取分割图像
+    mask_binary = imbinarize(seg_image);
+    [B,conNum] = connectDomain(mask_binary);
+    rgb = ind2rgb(gray2ind(mat2gray(B),255),turbo(255));
+    % ==============================================
+    rgb_save = [rgb_path,'\',img_name];
+    imwrite(uint8(rgb*255),rgb_save)
+    % ==============================================
+    area = sum(mask_binary(:)==1);
+    sub  = image.*uint8(mask_binary);
+    IntDen = sum(sub(:));
+    meanGray = IntDen/area;                  % 计算平均荧光强度
+    fprintf(fid,'%s \t %d \t %.2f\n',img_name,conNum,meanGray);
+end
+fclose(fid);
+%% step 3:统计并画图
+% ==============================================
+TXT = importdata([save_path,'\',saveName,'.txt']);
+Data = TXT.data;
+x = 0:1:(size(Data,1)-1);
+y_1 = Data(:,1); y_1=y_1'; %信号数目
+y_2 = Data(:,2); y_2=y_2'; %信号平均荧光强度
+figure,plot(x, y_1, 'r-', 'LineWidth', 2)
+hold on
+box off; % 去除右上坐标标记
+xlabel('frame'),ylabel('信号个数')
+set(gca,'linewidth',2) % 设置坐标轴线宽
+set(gca,'FontSize',16);
+saveas(gca,[save_path,'\信号个数.png']);
+% ==============================================
+% figure,plot(x, y_2, 'bo-','LineWidth', 1,'MarkerFaceColor','r','MarkerSize', 3)
+figure,plot(x, y_2, 'b-','LineWidth', 2)
+hold on
+box off; % 去除右上坐标标记
+xlabel('frame'),ylabel('平均荧光强度')
+set(gca,'linewidth',2) % 设置坐标轴线宽
+set(gca,'FontSize',16);
+saveas(gca,[save_path,'\平均荧光强度.png']);
+% ==============================================
+X1 = sprintf('<========== %s 已处理完成，结果保存于=> %s 文件夹中',saveName,[saveName,'_processed']);
+disp(X1)
+toc
+% disp(['运行时间: ',num2str(toc)]);
