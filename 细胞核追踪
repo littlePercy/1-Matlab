@@ -1,0 +1,42 @@
+tiffStack_img = TIf_read("G:\30 重医附二鞠大鹏-细胞核追踪-20240416\imgs\240410 ATP_15.vsi - CF488.tif");
+tiffStack_mask = TIf_read("G:\30 重医附二鞠大鹏-细胞核追踪-20240416\masks\240410 ATP_15.vsi - CF488.tif");
+save_path = 'ATP_15_6-result';
+fid = fopen('result_ATP_15_6.txt','w');
+ID = 6;
+fprintf(fid,'%s \t %s\n','帧数', '荧光强度');
+if exist(save_path)==0   %判断文件夹是否存在
+    mkdir(save_path);    %不存在时候，创建文件夹
+end
+for i = 1:size(tiffStack_img,3)
+    img_1 = tiffStack_img(:,:,i);
+    mask1 = tiffStack_mask(:,:,i);
+    output_image = zeros(size(img_1));
+    % 保留图像中像素值为ID的全部像素
+    output_image(mask1 == ID) = 1;
+    mask_binary1 = imbinarize(output_image);
+    total_pixels = sum(mask_binary1(:) == 1);
+    frame = sprintf('%04d', i);
+    figure,imshow(img_1,[],'border','tight','initialmagnification','fit')
+    hold on
+    if total_pixels >0
+        STATS = regionprops(mask_binary1,'Centroid');
+        center = STATS.Centroid;                                               % √√ 质心坐标（图像坐标系）
+        contours1 = bwperim(mask_binary1);
+        [row1, col1] = find(contours1==1);
+        %% 计算荧光强度
+        total_pixels = sum(mask_binary1(:) == 1);
+        intensity1 = img_1.*mask_binary1;
+        cal_intensity = sum(intensity1(:))/total_pixels;
+        %% 画图可视化
+        plot(col1,row1,'.','color','m');
+        text(center(1),center(2), num2str(ID),'Color',...
+                'green','FontSize',10,'FontWeight','bold');
+        %% 打印结果;
+        fprintf(fid,'%s \t %.2f\n', frame, cal_intensity);
+    end
+    set (gcf,'Position',[0,0,512,512]);
+    axis normal;
+    saveas(gca,[save_path,'/', frame,'.png'],'png');
+end
+fclose(fid);
+close all
