@@ -40,3 +40,26 @@ for i = 1:size(tiffStack_img,3)
 end
 fclose(fid);
 close all
+========================================================================================================
+globname = "result_ATP_15_1";
+% excelFileName = globname +'.xlsx';    % 保存Excel文件名
+%% 作散点图
+TXT1 = importdata(globname+'.txt');
+Data1 = TXT1.data;
+t = [Data1(1,1) Data1(end,1)];
+% t = 20/60 : 20/60 : 220*20/60;
+t = t(1)*30/60 : 30/60 : t(2)*30/60;
+y_1 = Data1(:,2); y_1=y_1'; %信号平均荧光强度
+figure,
+scatter(t, y_1, '.');
+xlabel('time (h)'), ylabel('intensity')
+box off;               % 去除右上坐标标记
+set(gca,'linewidth',1) % 设置坐标轴线宽
+set(gca,'FontSize',14);
+ax = gca;             % current axes
+ax.TickDir = 'out';   % 表头向外
+saveas(ax, globname+'.png');
+
+% T = table(Data1(:,1),Data1(:,2),Data1(:,3),Data1(:,4),Data1(:,5),...
+%     Data1(:,6),'VariableNames', {'帧数', '525信号', '525背景', '560信号', '560背景','560比525'});
+% writetable(T, excelFileName);
