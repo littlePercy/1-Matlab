@@ -1,0 +1,32 @@
+clear all; clc
+close all
+imgPath_ch01 = "G:\29 武大生科院李阳-点状蛋白互作分析-20240415\第二批\Carrarageenan\ch01";
+imgPath_ch02 = "G:\29 武大生科院李阳-点状蛋白互作分析-20240415\第二批\Carrarageenan\ch02";
+maskPath_ch01 = "G:\29 武大生科院李阳-点状蛋白互作分析-20240415\第二批\mask\Carrarageenan\ch01";
+maskPath_ch02 = "G:\29 武大生科院李阳-点状蛋白互作分析-20240415\第二批\mask\Carrarageenan\ch02";
+img_dir = dir(imgPath_ch01);
+fid = fopen('result_Carrarageenan.txt','w');
+fprintf(fid,'%s \t  %s \t %s \t %s \t %s\n','Name', '互作比例', '互作面积', '互作ch01荧光', '互作ch02荧光');
+for kk = 3:length(img_dir)
+    name1 = img_dir(kk).name;
+    name2 = name1(1:end-5)+"2.tif";
+    img1 = imread(imgPath_ch01+"\"+name1);
+    img2 = imread(imgPath_ch02+"\"+name2);
+    mask1 = imbinarize(imread(maskPath_ch01+"\"+name1));
+    mask2 = imbinarize(imread(maskPath_ch02+"\"+name2));
+    mask_inter = mask1 & mask2;
+    mask_union = mask1 | mask2;
+    total_pixels_inter = sum(mask_inter(:)==1);
+    total_pixels_union = sum(mask_union(:)==1);
+    % 交并比
+    IOU = total_pixels_inter/total_pixels_union;
+    % 互作面积
+    area = total_pixels_inter;
+    % 互作部分平均荧光强度
+    intensity1 = img1.*uint16(mask_inter);
+    intensity2 = img2.*uint16(mask_inter);
+    cal_ch01 = sum(intensity1(:))/total_pixels_inter;
+    cal_ch02 = sum(intensity2(:))/total_pixels_inter;
+    fprintf(fid,'%s \t %.2f \t %.2f \t %.2f \t %.2f\n', name1(1:end-6), IOU, area, cal_ch01, cal_ch02);
+end
+fclose(fid);
